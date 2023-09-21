@@ -117,6 +117,8 @@ class ProcedureTrace(IrTrace):
     def trace_py_func(self, py_f: Callable):
         with new_ir_trace_scope(self) as t:
             # TODO: Create IR proxies for python arguments.
+            # import pdb; pdb.set_trace()
+            print("unproxy")
             return_py_value = _unproxy(py_f(*self.proxy_posargs, **self.proxy_kwargs))
             if return_py_value is None:
                 self.emit_return()
@@ -133,6 +135,7 @@ class ProcedureTrace(IrTrace):
     def handle_call(self, target: Intrinsic, args, kwargs):
         """Implements calls to jittable functions."""
         with self.loc, self.ip:
+            print("hi")
             return target.resolve_call(self, *args, **kwargs)
 
     def handle_assignment(self, scope, target, updated_value):

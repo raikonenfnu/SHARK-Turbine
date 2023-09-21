@@ -74,6 +74,21 @@ TORCH_DTYPE_TO_IREE_TYPE: Dict[torch.dtype, Callable[[], IrType]] = {
     torch.complex128: lambda: ComplexType.get(F64Type.get()),
 }
 
+# IREE_TYPE_TO_TORCH_DTYPE: Dict[IrType, torch.dtype] = {
+#     F16Type: torch.float16,
+#     BF16Type: torch.bfloat16,
+#     F32Type: torch.float32,
+#     F64Type: torch.float64,
+#     IntegerType(8): torch.int8,
+#     IntegerType(16): torch.int16,
+#     IntegerType(32): torch.int32,
+#     IntegerType(64): torch.int64,
+#     IntegerType(1): torch.bool,
+#     ComplexType(F16Type): torch.complex32,
+#     ComplexType(F32Type): torch.complex64,
+#     ComplexType(F64Type): torch.complex128,
+# }
+
 TORCH_DTYPE_TO_IREE_TYPE_ASM = {
     torch.float16: "f16",
     torch.bfloat16: "bf16",

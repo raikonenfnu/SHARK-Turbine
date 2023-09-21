@@ -18,6 +18,7 @@ from typing import (
 )
 
 import torch
+from torch._subclasses.fake_tensor import FakeTensorMode
 
 from ..ir_imports import (
     IrType,
@@ -58,6 +59,17 @@ class IrValueScalar(Intrinsic):
 
     def resolve_ir_values(self, proc_trace: IrTrace) -> Sequence[Value]:
         return (self.ir_value,)
+
+    def _to_meta_scalar(self) -> torch.Tensor:
+        """Converts to a fake Tensor that dynamo can handle."""
+        shape = []
+        # TODO: We shouldn't need to create a real tensor here, as Dynamo will
+        # immediately convert it to fake. However, it will also set up the shape
+        # environment and asserts that any fake tensor inputs are from its
+        # internal FakeMode. There should be a way but needs more investigation.
+        # TODO: This tensor needs a device that matches the model being exported.
+        # We just create these on the CPU because that is common.
+        return torch.empty((),dtype=torch.int32)
 
 
 class IrTensorBase(Intrinsic):

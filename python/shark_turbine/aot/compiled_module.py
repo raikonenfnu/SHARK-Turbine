@@ -403,6 +403,7 @@ class CompiledModule(metaclass=CompiledModuleMeta):
 
             def do_export(proc_def: ExportProcDef):
                 def invoke_with_self(*args, **kwargs):
+                    print("calling invoke")
                     return proc_def.callable(self, *args, **kwargs)
 
                 logger.debug("Generating procedural function: %s", key)
@@ -422,6 +423,7 @@ class CompiledModule(metaclass=CompiledModuleMeta):
                     kwargs={},  # TODO: kwargs
                     loc=loc,
                 )
+                print("going for trace")
                 trace.trace_py_func(invoke_with_self)
                 info.shadow_dict[key] = _uncallable_public_export
 

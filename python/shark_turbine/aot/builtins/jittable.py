@@ -43,6 +43,7 @@ from ..support.procedural import (
     CallableIntrinsic,
     IrTrace,
     IrValueTensor,
+    IrValueScalar,
     MaterializedGlobal,
 )
 
@@ -142,6 +143,7 @@ class jittable(CallableIntrinsic):
             decomposition_table.update(get_decompositions(decompose_ops))
 
         self.wrapped_f = wrapped_f
+        print("exporting")
         self.exported_f = dynamo.export(
             wrapped_f,
             aten_graph=True,
@@ -169,7 +171,10 @@ class jittable(CallableIntrinsic):
 
         # Ask dynamo to give us an aten graph.
         pytorch_args, pytorch_kwargs = tree_unflatten(flat_pytorch_args, args_tree)
+        print("trying export")
+        import pdb; pdb.set_trace()
         gm, guards = self.exported_f(*pytorch_args, **pytorch_kwargs)
+        print("done")
         # We capture metadata about the results from the raw graph so that we can
         # pass it along in the trace (since the IREE type system is a partial erasure
         # of the PyTorch type system and we need the fidelity).
@@ -266,6 +271,8 @@ class jittable(CallableIntrinsic):
     def _split_py_arg(self, arg) -> Tuple[Value, Any]:
         if isinstance(arg, IrValueTensor):
             return arg.ir_value, arg._to_meta_tensor()
+        elif isinstance(arg, IrValueScalar):
+            return arg.ir_value, arg._to_meta_scalar()
 
         raise TypeError(f"Unsupported argument to jittable: {arg}")
 
