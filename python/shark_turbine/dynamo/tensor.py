@@ -53,7 +53,7 @@ from .passes import turbine_cpu_pass_pipeline
 DEFAULT_COMPILER_FLAGS = (
     # Enable asynchronous calling convention.
     # TODO: Enable async execution mode.
-    # "--iree-execution-model=async-external",
+    "--iree-execution-model=async-external",
     "--iree-input-type=tm_tensor",
 )
 
@@ -473,11 +473,15 @@ def compute_method(super_fn, *args, **kwargs):
     if len(devices) > 1:
         raise ValueError("Turbine do not support mixed device!")
     # Get a unique encoding to identify computation/dispatch using opCode, input shapes, and dtypes.
+    device = Device("local-task")
     compute_id_encode = str(src_op) + "".join([str(py_arg.shape) + str(py_arg.dtype) for py_arg in py_args])
     compute_hash = hash(compute_id_encode)
     if compute_hash in TurbineMode.CACHED_IMPLEMENTATIONS:
         # TODO: Handle multiple output.
-        return DeviceTensor.from_torch(TurbineMode.CACHED_IMPLEMENTATIONS[compute_hash](*py_args, **kwargs)[0])
+        exec_res = TurbineMode.CACHED_IMPLEMENTATIONS[compute_hash](*py_args, **kwargs)[0]
+        storage = Storage(device, exec_res.buffer)
+        storage.ready_fence = exec_res.signal
+        return DeviceTensor(exec_res.size, exec_res.dtype, raw_data=storage)
 
     # Preprocess func and generate into FX.
     flat_pytorch_args = [py_arg._to_meta_tensor() for py_arg in py_args]
@@ -527,17 +531,17 @@ def compute_method(super_fn, *args, **kwargs):
     output.close()
 
     # Load and execute VMFB file.
+    # Think about better way then recreating device everytime.
     exec = EagerSpecializedExecutable(vmfb_module, device_state)
-    res_host = exec(*py_args)
+    exec_results = exec(*py_args)
+    tensor_results = []
+    for exec_res in exec_results:
+        storage = Storage(device, exec_res.buffer)
+        storage.ready_fence = exec_res.signal
+        tensor_results.append(DeviceTensor(exec_res.size, exec_res.dtype, raw_data=storage))
 
     TurbineMode.CACHED_IMPLEMENTATIONS[compute_hash] = exec
-
-    # Rewrap torch tensor into DeviceTensor and return.
-    # TODO: Handle multiple output.
-    # TODO: Refactor to not need to create new buffers every time once https://github.com/openxla/iree/pull/14997 lands.
-    dev_res = DeviceTensor._async_create_empty(res_host[0].size(), Device("local-task"), res_host[0].dtype)
-    dev_res._async_copy_from_host(res_host[0].numpy())
-    return dev_res
+    return tensor_results[0]
 
 
 ###############################################################################
