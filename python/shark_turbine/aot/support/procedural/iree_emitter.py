@@ -187,6 +187,26 @@ class IREEEmitter:
         return result
 
     @emitter
+    def tensor_alloca(
+        self, *dims: BuildableTensorDimDecl, dtype: torch.dtype = torch.float32
+    ) -> IrTensor:
+        """Constructs a tensor with uninitialized values.
+
+        TODO: Support an IREE/raw element type in addition to the torch dtype.
+        See: https://github.com/nod-ai/SHARK-Turbine/issues/130
+        """
+        dim_decls, dyn_dim_values = cast_tensor_dim_decl(dims)
+        try:
+            element_type = TORCH_DTYPE_TO_IREE_TYPE[dtype]()
+        except KeyError:
+            raise ValueError(f"Could not map Torch dtype {dtype} to an IREE type")
+        tensor_type = RankedTensorType.get(dim_decls, element_type)
+        raw_tensor = flow_d.TensorAllocaOp(tensor_type, dyn_dim_values).result
+        result = IrImmediateTensor(raw_tensor, dtype=dtype)
+        result.set_dynamic_dim_values(dyn_dim_values)
+        return result
+
+    @emitter
     def tensor_reshape(
         self, source: BuildableTensorType, *result_dims: BuildableTensorDimDecl
     ) -> "IrTensor":

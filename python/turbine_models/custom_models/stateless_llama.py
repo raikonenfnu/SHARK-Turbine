@@ -110,6 +110,11 @@ def export_transformer_model(
         size=(HEADS * 2, BATCH_SIZE, MAX_STEP_SEQ, HEADS, HIDDEN_DIM),
         dtype=dtype,
     )
+    STREAMING_WINDOW_SIZE = 508
+    streaming_llm_update = torch.zeros(
+        size=(1, 1, STREAMING_WINDOW_SIZE, HEADS, HIDDEN_DIM),
+        dtype=dtype,
+    )
 
     mapper = {}
     if external_weights is not None:
@@ -135,6 +140,9 @@ def export_transformer_model(
             abstractify(global_pkv), uninitialized=True, mutable=True
         )
         global_seq_step = export_global(AbstractIndex, mutable=True)
+        streaming_llm_window = export_global(
+            abstractify(streaming_llm_update), uninitialized=True, mutable=True
+        )
 
         def run_initialize(self, x=AbstractTensor(BATCH_SIZE, None, dtype=torch.int64)):
             init_const = [x.dynamic_dim(1) < MAX_STEP_SEQ]
@@ -177,6 +185,33 @@ def export_transformer_model(
                 )
             self.global_seq_step = self.global_seq_step + len_of_new_tokens
             return token
+
+        # Streaming-LLM KVCache evict algorithm:
+        # slice1 = KVCache[0 : sink]
+        # slice2 = KVCache[seq_len - window_size : seq_len]
+        # KVCache = torch.cat([slice1, slice2])
+        # TODO: There is actual overlap of data.
+        # For e.g at token length 600, sink size 4, and window size 508
+        # Then KVCache[4:512] going to be replaced by KVCache[600-508: (600-508)+508]
+        # => KVCache[4:512] = KVCache[92:600] => Much overlap of data(i.e 92->512)
+        # => We'd need to do a copy and then replace. Or we can make the gap at least 2X.
+        def evict_kvcache_space(self):
+            # TODO: Replace hardcoded with global variable.
+            sink_size = 4
+            # most_recent_window = self.global_seq_step - window_size
+            most_recent_window = self.global_seq_step + (-STREAMING_WINDOW_SIZE)
+            for i in range(HEADS * 2):
+                update_window_state = IREE.tensor_slice(
+                    self.global_state, i, 0, (most_recent_window, STREAMING_WINDOW_SIZE), (0, HEADS), (0, HIDDEN_DIM)
+                )  # sequence context dim
+                self.streaming_llm_window = IREE.tensor_update(
+                    self.streaming_llm_window, update_window_state, 0, 0, 0, 0, 0
+                )
+                self.global_state = IREE.tensor_update(
+                    self.global_state, self.streaming_llm_window, i, 0, sink_size, 0, 0
+                )
+            self.global_seq_step = self.global_seq_step.set(STREAMING_WINDOW_SIZE + sink_size)
+            return self.global_seq_step
 
         def run_forward(self, x=AbstractTensor(1, 1, dtype=torch.int64)):
             state_arg = slice_up_to_step(

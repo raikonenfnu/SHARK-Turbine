@@ -86,7 +86,17 @@ class SharkLLM(object):
     def format_out(self, results):
         return torch.tensor(results.to_host()[0][0])
 
+    def evict_kvcache_space(self):
+        self.runner.ctx.modules.state_update["evict_kvcache_space"]()
+
     def generate(self, input_ids):
+        # TODO: Replace with args.
+        if self.init_cache and self.runner.ctx.modules.state_update["get_seq_step"]() > 600:
+            print("Evicting cache space!")
+            old_pkv = self.runner.ctx.modules.state_update["get_global_state"]().to_host()
+            self.runner.ctx.modules.state_update["evict_kvcache_space"]()
+            new_pkv = self.runner.ctx.modules.state_update["get_global_state"]().to_host()
+            import pdb; pdb.set_trace()
         turbine_results = []
         # Only need not seen token for init cache
         # Because we have stored the res in KV-cache.
@@ -164,7 +174,6 @@ def run_llm(
         bot_response = tokenizer.decode(result)
         print(f"\nBOT: {bot_response}\n")
         prompt = append_bot_prompt(prompt, bot_response)
-        # print("total prompt:",prompt)
 
 
 if __name__ == "__main__":
