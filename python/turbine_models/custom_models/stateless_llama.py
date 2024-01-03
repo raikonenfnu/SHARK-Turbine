@@ -191,18 +191,13 @@ def export_transformer_model(
             # TODO: Replace hardcoded with global variable.
             sink_size = 4
             window_size = 508
-            # most_recent_window = self.global_seq_step - window_size
             most_recent_window = self.global_seq_step + (-window_size)
-            alloc_window_state = IREE.tensor_alloca(1, 1, window_size, HEADS, HIDDEN_DIM, dtype=dtype)
             for i in range(HEADS * 2):
                 update_window_state = IREE.tensor_slice(
                     self.global_state, i, 0, (most_recent_window, window_size), (0, HEADS), (0, HIDDEN_DIM)
                 )  # sequence context dim
-                alloc_window_state = IREE.tensor_update(
-                    alloc_window_state, update_window_state, 0, 0, 0, 0, 0
-                )
-                self.global_state = IREE.tensor_update(
-                    self.global_state, alloc_window_state, i, 0, sink_size, 0, 0
+                self.global_state = IREE.tensor_move(
+                    self.global_state, update_window_state, i, 0, sink_size, 0, 0
                 )
             self.global_seq_step = self.global_seq_step.set(window_size + sink_size)
             return self.global_seq_step

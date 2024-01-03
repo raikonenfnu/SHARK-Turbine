@@ -207,6 +207,19 @@ class IREEEmitter:
         return result
 
     @emitter
+    def tensor_clone(
+        self, source: BuildableTensorType
+    ) -> "IrTensor":
+        constant_cache: Dict[int, Value] = {}
+        source = cast_tensor_value(source)
+        result_value = flow_d.TensorCloneOp(
+            source.ir_value,
+            source.get_only_dynamic_dim_values(constant_cache=constant_cache),
+        ).result
+        result = IrImmediateTensor(result_value, dtype=source.dtype)
+        return result
+
+    @emitter
     def tensor_reshape(
         self, source: BuildableTensorType, *result_dims: BuildableTensorDimDecl
     ) -> "IrTensor":
@@ -327,6 +340,38 @@ class IREEEmitter:
             for idx in start_indices
         ]
         result_value = flow_d.TensorUpdateOp(
+            target.ir_value,
+            target_dynamic_dims,
+            start_index_dim_values,
+            update.ir_value,
+            update_dynamic_dims,
+        ).result
+        result = IrImmediateTensor(result_value, target.dtype)
+        result.set_dynamic_dim_values(target_dynamic_dims)
+        return result
+
+    @emitter
+    def tensor_move(
+        self,
+        target: BuildableTensorType,
+        update: BuildableTensorType,
+        *start_indices: BuildableIndexType,
+    ) -> "IrTensor":
+        """Applies an update to a target at start_indices and returns the mutated target."""
+        constant_cache: Dict[int, Value] = {}
+        target = cast_tensor_value(target)
+        target_dynamic_dims = target.get_only_dynamic_dim_values(
+            constant_cache=constant_cache
+        )
+        update = cast_tensor_value(update)
+        update_dynamic_dims = update.get_only_dynamic_dim_values(
+            constant_cache=constant_cache
+        )
+        start_index_dim_values = [
+            cast_index_value(idx, constant_cache=constant_cache)
+            for idx in start_indices
+        ]
+        result_value = flow_d.TensorMoveOp(
             target.ir_value,
             target_dynamic_dims,
             start_index_dim_values,
