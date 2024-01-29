@@ -14,6 +14,7 @@ from turbine_models.custom_models.llm_optimizations.streaming_llm.modify_llama i
 
 from turbine_models.custom_models import remap_gguf
 import safetensors
+import copy
 
 BATCH_SIZE = 1
 
@@ -105,6 +106,11 @@ def export_transformer_model(
         torch_dtype=torch.float,
         token=hf_auth_token,
     )
+    debug = True
+    if debug:
+        my_config = copy.deepcopy(mod.config)
+        my_config.num_hidden_layers = 4
+        mod = AutoModelForCausalLM.from_config(my_config)
     if mod.config.num_attention_heads == 8:
         state_schema = pytree.treespec_loads(json_schema_16)
     else:
@@ -121,6 +127,7 @@ def export_transformer_model(
         token=hf_auth_token,
     )
     # TODO: generate these values instead of magic numbers
+    NUM_LAYERS = mod.config.num_hidden_layers
     HEADS = mod.config.num_attention_heads
     HIDDEN_DIM = int(mod.config.hidden_size / HEADS)
     BATCH_SIZE = 1
@@ -161,7 +168,7 @@ def export_transformer_model(
             self.global_seq_step = IREE.tensor_dim(
                 state[0], 1
             )  # ? dimension of arbitrarily 0th kv tensor
-            for i in range(HEADS * 2):
+            for i in range(NUM_LAYERS * 2):
                 slice_of_state = IREE.tensor_reshape(
                     state[i], 1, 1, self.global_seq_step, HEADS, HIDDEN_DIM
                 )
@@ -183,7 +190,7 @@ def export_transformer_model(
                 + [x.dynamic_dim(1) < MAX_STEP_SEQ for x in state_arg[1:]]
             )
             token, *state_update = self.forward(x, *state_arg, constraints=forw_const)
-            for i in range(HEADS * 2):
+            for i in range(NUM_LAYERS * 2):
                 update = IREE.tensor_reshape(
                     state_update[i], 1, 1, 1, HEADS, HIDDEN_DIM
                 )
@@ -243,7 +250,7 @@ def export_transformer_model(
             len_of_new_tokens = IREE.tensor_dim(
                 state[0], 1
             )  # ? dimension of arbitrarily 0th kv tensor
-            for i in range(HEADS * 2):
+            for i in range(NUM_LAYERS * 2):
                 slice_of_state = IREE.tensor_reshape(
                     state[i], 1, 1, len_of_new_tokens, HEADS, HIDDEN_DIM
                 )
@@ -278,7 +285,7 @@ def export_transformer_model(
             sink_size = 4
             window_size = 252
             most_recent_window = self.global_seq_step + (-window_size)
-            for i in range(HEADS * 2):
+            for i in range(NUM_LAYERS * 2):
                 update_window_state = IREE.tensor_slice(
                     self.global_state,
                     i,
