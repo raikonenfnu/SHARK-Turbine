@@ -105,7 +105,7 @@ class SharkLLM(object):
         self.streaming_llm = streaming_llm
         self.prev_token_len = 0
         self.min_token = 0
-        self.max_token = 1024
+        self.max_token = 256
         self.last_prefill_time = -1.0
         self.last_prompt_decode_time = -1.0
         self.last_num_tokens_decoded = -1
@@ -115,7 +115,7 @@ class SharkLLM(object):
         self.min_token = min_token
 
     def set_max_token(self, max_token):
-        self.max_token = max_token
+        self.max_token = 256
 
     def format_out(self, results):
         return torch.tensor(results.to_host()[0][0])

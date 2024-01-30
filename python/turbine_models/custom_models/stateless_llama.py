@@ -106,11 +106,11 @@ def export_transformer_model(
         torch_dtype=torch.float,
         token=hf_auth_token,
     )
-    debug = True
-    if debug:
-        my_config = copy.deepcopy(mod.config)
-        my_config.num_hidden_layers = 4
-        mod = AutoModelForCausalLM.from_config(my_config)
+    # debug = True
+    # if debug:
+    #     my_config = copy.deepcopy(mod.config)
+    #     my_config.num_hidden_layers = 4
+    #     mod = AutoModelForCausalLM.from_config(my_config)
     if mod.config.num_attention_heads == 8:
         state_schema = pytree.treespec_loads(json_schema_16)
     else:
@@ -226,7 +226,7 @@ def export_transformer_model(
             state1_flat = [torch.transpose(x[:, :, -1:, :], 1, 2) for x in state1_flat]
             token1 = torch.argmax(result.logits[:, -1, :], dim=1)
             token1 = token1[None, :]
-            return token1, *state1_flat
+            return result.logits[:, -1, :], *state1_flat
 
     class StreamingStateUpdateModule(StateUpdateModule):
         def run_cached_initialize(
@@ -346,6 +346,8 @@ def export_transformer_model(
                 [
                     "--iree-rocm-target-chip=" + target_triple,
                     "--iree-rocm-link-bc=true",
+                    "--iree-stream-resource-max-allocation-size="
+                    + vulkan_max_allocation,
                     "--iree-rocm-bc-dir=/opt/rocm/amdgcn/bitcode",
                     "--iree-vm-bytecode-module-strip-source-map=true",
                     "--iree-opt-strip-assertions=true",

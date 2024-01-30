@@ -195,9 +195,17 @@ def run_llm(
     model = runner.ctx.modules.state_update
     initial_input = tokenizer(prompt, return_tensors="pt")
     example_input_id = initial_input.input_ids
-    new_input_id = torch.zeros_like(example_input_id)
-    inputs = [ireert.asdevicearray(runner.config.device, new_input_id)]
+    # new_input_id = torch.zeros_like(example_input_id)
+    inputs = [ireert.asdevicearray(runner.config.device, example_input_id)]
     results = model["run_initialize"](*inputs)
+    print("first: ", results, tokenizer.decode(results))
+    results = model["run_forward"](results)
+    import pdb; pdb.set_trace()
+    print("second: ", results, tokenizer.decode(results))
+    results = model["run_forward"](results)
+    print("third: ", results, tokenizer.decode(results))
+    results = model["run_forward"](results)
+    print("fourth: ", results, tokenizer.decode(results))
     return torch.tensor(results.to_host()[0][0])
 
 
