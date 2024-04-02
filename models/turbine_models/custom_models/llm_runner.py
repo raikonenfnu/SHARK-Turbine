@@ -7,6 +7,7 @@ import time
 from turbine_models.custom_models.llm_optimizations.streaming_llm.modify_llama import (
     enable_llama_pos_shift_attention,
 )
+import numpy as np
 
 parser = argparse.ArgumentParser()
 
@@ -125,6 +126,8 @@ class SharkLLM(object):
         if self.first_input or not self.streaming_llm:
             s = time.time()
             results = self.model["run_initialize"](*inputs)  # example_input_id
+            # results = np.argmax(results.to_host()).reshape(1,1)
+            # results = ireert.asdevicearray(self.runner.config.device, results)
             e = time.time()
             print(
                 f"num_tokens: {token_len}, time_taken={e-s}, tok/second:{token_len/(e-s)}"
@@ -146,9 +149,13 @@ class SharkLLM(object):
                 print("Evicting cache space!")
                 self.model["evict_kvcache_space"]()
             results = self.model["run_forward"](results)
+            # results = np.argmax(results.to_host()).reshape(1,1)
+            # results = ireert.asdevicearray(self.runner.config.device, results)
             # uncomment to see tokens as they are emitted
             # print(f"turbine: {tokenizer.decode(self.format_out(results))}")
             turbine_results.append(self.format_out(results))
+            if (len(turbine_results) >= 128):
+                break
         e = time.time()
         decoded_tokens = len(turbine_results)
         print(

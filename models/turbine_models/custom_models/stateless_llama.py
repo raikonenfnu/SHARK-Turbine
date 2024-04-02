@@ -16,7 +16,7 @@ from turbine_models.custom_models.llm_optimizations.streaming_llm.modify_llama i
 
 from turbine_models.custom_models import remap_gguf
 import safetensors
-
+import copy
 BATCH_SIZE = 1
 
 import argparse
@@ -133,6 +133,9 @@ def export_transformer_model(
         torch_dtype=torch.float,
         token=hf_auth_token,
     )
+    my_config = copy.deepcopy(mod.config)
+    my_config.num_hidden_layers = 1
+    mod = AutoModelForCausalLM.from_config(my_config)
     schema_json = generate_schema(mod.config.num_hidden_layers)
     state_schema = pytree.treespec_loads(schema_json)
     if streaming_llm:
@@ -260,10 +263,10 @@ def export_transformer_model(
         def initialize(input_ids):
             result = mod.forward(input_ids)
             state1_flat, _ = pytree.tree_flatten(result.past_key_values)
-            token1 = torch.argmax(result.logits[:, -1, :], dim=1)
-            token1 = token1[None, :]
+            # token1 = torch.argmax(result.logits[:, -1, :], dim=1)
+            # token1 = token1[None, :]
             state1_flat = [torch.transpose(x, 1, 2) for x in state1_flat]
-            return token1, *state1_flat
+            return result.logits[:, -1, :], *state1_flat
 
         @jittable
         def forward(token0: torch.Tensor, *state0_flat):
@@ -273,9 +276,9 @@ def export_transformer_model(
             result = mod.forward(token0, past_key_values=state0)
             state1_flat, _ = pytree.tree_flatten(result.past_key_values)
             state1_flat = [torch.transpose(x[:, :, -1:, :], 1, 2) for x in state1_flat]
-            token1 = torch.argmax(result.logits[:, -1, :], dim=1)
-            token1 = token1[None, :]
-            return token1, *state1_flat
+            # token1 = torch.argmax(result.logits[:, -1, :], dim=1)
+            # token1 = token1[None, :]
+            return result.logits[:, -1, :], *state1_flat
 
     class StreamingStateUpdateModule(StateUpdateModule):
         def run_cached_initialize(
@@ -443,10 +446,11 @@ def export_transformer_model(
             flags.extend(
                 [
                     "--iree-rocm-target-chip=" + target_triple,
-                    "--iree-rocm-link-bc=true",
                     "--iree-vm-bytecode-module-strip-source-map=true",
                     "--iree-opt-strip-assertions=true",
                     "--iree-vm-target-truncate-unsupported-floats",
+                    "--iree-codegen-llvmgpu-enable-transform-dialect-jit=false",
+                    # "--iree-preprocessing-transform-spec-filename=/home/stanley/nod/macroHipKernel/example_transform_spec.mlir",
                 ]
             )
             ukernel_supported_arch = {"gfx90a", "gfx940", "gfx1030", "gfx1100"}
