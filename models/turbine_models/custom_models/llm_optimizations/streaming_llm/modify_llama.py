@@ -72,18 +72,48 @@ def llama_pos_shift_attention_forward(
     ###
 
     # repeat k/v heads if n_kv_heads < n_heads
-    key_states = repeat_kv(key_states, self.num_key_value_groups)
-    value_states = repeat_kv(value_states, self.num_key_value_groups)
-    softmax_scale = 1.0 / math.sqrt(self.head_dim)
-    attn_weights = (
-        torch.matmul(query_states, key_states.transpose(2, 3)) * softmax_scale
-    )
-
-    if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
-        raise ValueError(
-            f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
-            f" {attn_weights.size()}"
+    # q_state = q_state = query_states.reshape([1, self.num_key_value_groups, -1, 16, 64])
+    # new_attn_weight = (torch.matmul(q_state, key_states.unsqueeze(2).transpose(3, 4)) * softmax_scale).flatten(1,2)
+    if self.num_key_value_groups == 1:
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
+        softmax_scale = 1.0 / math.sqrt(self.head_dim)
+        attn_weights = (
+            torch.matmul(query_states, key_states.transpose(2, 3)) * softmax_scale
         )
+        if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
+            raise ValueError(
+                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
+                f" {attn_weights.size()}"
+            )
+
+    else:
+        softmax_scale = 1.0 / math.sqrt(self.head_dim)
+        attn_weights = (
+            torch.matmul(
+                query_states.reshape(
+                    [
+                        query_states.shape[0],
+                        self.num_key_value_heads,
+                        -1,
+                        *query_states.shape[2:],
+                    ]
+                ),
+                key_states.unsqueeze(2).transpose(3, 4),
+            )
+            * softmax_scale
+        )
+        if attn_weights.size() != (
+            bsz,
+            self.num_key_value_heads,
+            self.num_key_value_groups,
+            q_len,
+            kv_seq_len,
+        ):
+            raise ValueError(
+                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
+                f" {attn_weights.size()}"
+            )
 
     # For causal mode, we use to get input mask, but now causal mode does not expect a mask
     # and we need to generate the causal mask ourselves.
@@ -113,7 +143,12 @@ def llama_pos_shift_attention_forward(
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
         query_states.dtype
     )
-    attn_output = torch.matmul(attn_weights, value_states)
+    if self.num_key_value_groups == 1:
+        attn_output = torch.matmul(attn_weights, value_states)
+    else:
+        attn_output = torch.matmul(attn_weights, value_states.unsqueeze(2)).flatten(
+            1, 2
+        )
 
     if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
         raise ValueError(
@@ -127,6 +162,8 @@ def llama_pos_shift_attention_forward(
 
 
 def enable_llama_pos_shift_attention(model):
+    if isinstance(model, LlamaAttention):
+        model.forward = types.MethodType(llama_pos_shift_attention_forward, model)
     for name, module in reversed(model._modules.items()):
         if len(list(module.children())) > 0:
             enable_llama_pos_shift_attention(
