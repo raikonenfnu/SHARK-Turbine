@@ -10,7 +10,6 @@ from shark_turbine import aot
 from sharktank import ops
 from turbine_models.custom_models.llm_optimizations import ops
 
-
 class MyModule(torch.nn.Module):
     def forward(self, a, b):
         return ops.bmm_bcast_rhs(a, b)
@@ -20,11 +19,12 @@ def main():
     ep = torch.export.export(
         mod,
         args=(
-            torch.rand([4, 128, 32], dtype=torch.float32),
-            torch.rand([256, 32], dtype=torch.float32),
+            torch.rand([1, 8, 16, 1, 16], dtype=torch.float32),
+            torch.rand([1, 8, 16, 32], dtype=torch.float32),
         ),
     )
     output = aot.export(ep)
+    asm = str(output.mlir_module)
     import pdb; pdb.set_trace()
 
 
