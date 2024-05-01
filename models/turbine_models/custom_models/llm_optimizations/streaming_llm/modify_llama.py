@@ -14,6 +14,7 @@ from transformers.models.llama.modeling_llama import (
     repeat_kv,
 )
 import types
+from turbine_models.custom_models.llm_optimizations import ops
 
 __all__ = ["enable_llama_pos_shift_attention"]
 
@@ -90,7 +91,7 @@ def llama_pos_shift_attention_forward(
     else:
         softmax_scale = 1.0 / math.sqrt(self.head_dim)
         attn_weights = (
-            torch.matmul(
+            ops.bmmt_bcast_rhs(
                 query_states.reshape(
                     [
                         query_states.shape[0],
@@ -99,7 +100,7 @@ def llama_pos_shift_attention_forward(
                         *query_states.shape[2:],
                     ]
                 ),
-                key_states.unsqueeze(2).transpose(3, 4),
+                key_states,
             )
             * softmax_scale
         )
@@ -146,7 +147,7 @@ def llama_pos_shift_attention_forward(
     if self.num_key_value_groups == 1:
         attn_output = torch.matmul(attn_weights, value_states)
     else:
-        attn_output = torch.matmul(attn_weights, value_states.unsqueeze(2)).flatten(
+        attn_output = ops.bmm_bcast_rhs(attn_weights, value_states).flatten(
             1, 2
         )
 
