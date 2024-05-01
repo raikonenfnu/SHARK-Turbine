@@ -5,3 +5,4 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 from .bmm_bcast_rhs import * 
+from .bmmt_bcast_rhs import * 

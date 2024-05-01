@@ -14,44 +14,19 @@ __all__ = [
     "bmm_bcast_rhs",
 ]
 
-def inline_local_template_function(
-    kb: KernelBuilder,
-    template_file: str,
-    function_name: str,
-    template_type: str = "format",
-    **kwargs,
-) -> Operation:
-    """Inlines a template module by first expanding its ASM via **kwargs.
-
-    Returns the inlined symbol `function_name`, which is expected to have been
-    in the template.
-    """
-    try:
-        return kb.symbol_table[function_name]
-    except KeyError:
-        pass
-    source_module_op = load_local_jinja_template(kb, template_file, **kwargs)
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            "Generated kernel IR %s:\n%s", function_name, str(source_module_op)
-        )
-    merger = Merger(
-        source_module_op, kb.module_body.owner, target_symbol_table=kb.symbol_table
-    )
-    merger.merge()
-    return kb.symbol_table[function_name]
-
 @CustomOp.register(library=LIBRARY)
 class bmm_bcast_rhs(CustomOp):
     """Performs a floating point matmul of an 'a' and transposed 'b' tensor.
 
     The types need not match: the bT tensor will be cast to the dtype of the
     'a' tensor.
-    a_desc = ksel.arg_tensor(0)  # Shape bsz, num_head, num_group, q_len, kv_len
+    a_desc = ksel.arg_tensor(0)  # Shape bsz, num_head, num_group, kv_len, kv_len
     b_desc = ksel.arg_tensor(1)  # Shape bsz, num_head, kv_len, hidden_dim
+    To compute (attn * v) for prefill and decoede:
+         m == dyn, k == dyn, n == static
     """
 
-    signature = "bmm_bcast_rhs(Tensor a, Tensor bT) -> (Tensor)"
+    signature = "bmm_bcast_rhs(Tensor a, Tensor b) -> (Tensor)"
 
     def select(self, ksel: KernelSelection):
         a_desc = ksel.arg_tensor(0)  # Shape b0, b1, bcast, m, k
@@ -82,22 +57,22 @@ class bmm_bcast_rhs(CustomOp):
         )
 
         # Specialize on the k and n dims.
-        # a_desc.specialize_dims(0, 1, 2, 3)
         a_desc.specialize_dims(0)
         a_desc.specialize_dims(1)
         a_desc.specialize_dims(2)
-        a_desc.specialize_dims(3)
 
-        # b_desc.specialize_all_dims(0, 1, 3)
         b_desc.specialize_dims(0)
         b_desc.specialize_dims(1)
         b_desc.specialize_dims(3)
 
         # Result 0: Shape b0, b1, bcast, m, n
-        ksel.return_new_tensor(
+        out_desc = ksel.return_new_tensor(
             a_batch_dims + [bcast, a_m, b_n], a_desc.t.dtype
-        ).specialize_all_dims()
-
+        )
+        out_desc.specialize_dims(0)
+        out_desc.specialize_dims(1)
+        out_desc.specialize_dims(2)
+        out_desc.specialize_dims(4)
 
     def generate(self, ksel: KernelSelection, kb: KernelBuilder):
         a = kb.arg_value(0)
