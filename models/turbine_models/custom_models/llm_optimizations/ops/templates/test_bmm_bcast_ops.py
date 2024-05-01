@@ -10,9 +10,15 @@ from shark_turbine import aot
 from sharktank import ops
 from turbine_models.custom_models.llm_optimizations import ops
 
+
+# attn_weight: torch.Size([1, 8, 16, 16, 16]) bcdmk
+# value_states: torch.Size(([1, 8, 16, 32])) -> torch.Size([1, 8, 1, 16, 32]) bckn
+
+
 class MyModule(torch.nn.Module):
     def forward(self, a, b):
         return ops.bmm_bcast_rhs(a, b)
+
 
 def main():
     mod = MyModule()
@@ -33,9 +39,8 @@ def main():
     result = ops.bmm_bcast_rhs(lhs, rhs)
     torch.testing.assert_close(result, ref)
     print("SUCCESS")
-    import pdb; pdb.set_trace()
+    print(asm)
 
 
 if __name__ == "__main__":
     main()
-

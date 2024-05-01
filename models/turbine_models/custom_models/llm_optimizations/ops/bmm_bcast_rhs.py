@@ -14,6 +14,7 @@ __all__ = [
     "bmm_bcast_rhs",
 ]
 
+
 @CustomOp.register(library=LIBRARY)
 class bmm_bcast_rhs(CustomOp):
     """Performs a floating point matmul of an 'a' and transposed 'b' tensor.
@@ -46,10 +47,12 @@ class bmm_bcast_rhs(CustomOp):
             lambda: f"bmm_bcast_rhs arg 'a': Expected 2d batch (got {a_batch_dims})",
         )
         torch._check(
-            len(a_desc.t.shape) == 5, f"bmm_bcast_rhs arg 'a': Expected 5d tensor (got {a_desc.t.shape})"
+            len(a_desc.t.shape) == 5,
+            f"bmm_bcast_rhs arg 'a': Expected 5d tensor (got {a_desc.t.shape})",
         )
         torch._check(
-            len(b_desc.t.shape) == 4, f"bmm_bcast_rhs arg 'b': Expected 4d tensor (got {b_desc.t.shape})"
+            len(b_desc.t.shape) == 4,
+            f"bmm_bcast_rhs arg 'b': Expected 4d tensor (got {b_desc.t.shape})",
         )
         torch._check(
             a_k == b_k,
@@ -99,7 +102,9 @@ class bmm_bcast_rhs(CustomOp):
             "b_type": b_type_str,
             "precision": precision_type_str,
         }
-        base._JINJA2_ENVIRONMENT = Environment(loader=PackageLoader(__name__, "templates"))
+        base._JINJA2_ENVIRONMENT = Environment(
+            loader=PackageLoader(__name__, "templates")
+        )
         template_file = "bmm_bcast_rhs.mlir"
         target_function_name = (
             f"sharktank_bmm_bcast_rhs_deq_{b0}_{b1}_{bcast}_{n}_{precision_type_str}"

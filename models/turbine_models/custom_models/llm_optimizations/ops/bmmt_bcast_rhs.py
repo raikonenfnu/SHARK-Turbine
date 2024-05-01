@@ -51,10 +51,12 @@ class bmmt_bcast_rhs(CustomOp):
             lambda: f"bmmt_bcast_rhs arg 'a': Expected 2d batch (got {a_batch_dims})",
         )
         torch._check(
-            len(a_desc.t.shape) == 5, f"bmmt_bcast_rhs arg 'a': Expected 5d tensor (got {a_desc.t.shape})"
+            len(a_desc.t.shape) == 5,
+            f"bmmt_bcast_rhs arg 'a': Expected 5d tensor (got {a_desc.t.shape})",
         )
         torch._check(
-            len(bT_desc.t.shape) == 4, f"bmmt_bcast_rhs arg 'b': Expected 4d tensor (got {bT_desc.t.shape})"
+            len(bT_desc.t.shape) == 4,
+            f"bmmt_bcast_rhs arg 'b': Expected 4d tensor (got {bT_desc.t.shape})",
         )
         torch._check(
             a_k == bT_k,
@@ -110,7 +112,9 @@ class bmmt_bcast_rhs(CustomOp):
             "bT_type": bT_type_str,
             "precision": precision_type_str,
         }
-        base._JINJA2_ENVIRONMENT = Environment(loader=PackageLoader(__name__, "templates"))
+        base._JINJA2_ENVIRONMENT = Environment(
+            loader=PackageLoader(__name__, "templates")
+        )
         template_file = "bmmt_bcast_rhs.mlir"
         target_function_name = (
             f"sharktank_bmmt_bcast_rhs_deq_{b0}_{b1}_{bcast}_{k}_{precision_type_str}"
@@ -122,6 +126,7 @@ class bmmt_bcast_rhs(CustomOp):
             **kwargs,
         )
         kb.yield_results(*call_function(target_function, *kb.arg_bindings))
+
 
 _PRECISION_TYPE: dict[str, str] = {
     "f16f16": "f16",

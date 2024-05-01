@@ -10,12 +10,15 @@ from shark_turbine import aot
 from sharktank import ops
 from turbine_models.custom_models.llm_optimizations import ops
 
+
 class MyModule(torch.nn.Module):
     def forward(self, a, b):
         return ops.bmmt_bcast_rhs(a, b)
 
-# // query_states torch.Size([1, 128, 16, 32]) -> torch.Size([1, 8, 16, 16, 32]) bcdmk
-# // key_states torch.Size([1, 8, 16, 32]) ->  torch.Size([1, 8, 1, 32, 16]
+
+# query_states torch.Size([1, 128, 16, 32]) -> torch.Size([1, 8, 16, 16, 32]) bcdmk
+# key_states torch.Size([1, 8, 16, 32]) ->  torch.Size([1, 8, 1, 32, 16]
+
 
 def main():
     mod = MyModule()
@@ -44,11 +47,13 @@ def main():
         ),
         rhs.unsqueeze(2).transpose(3, 4),
     )
-    result = ops.bmmt_bcast_rhs(lhs.reshape([lhs.shape[0], num_key_value_heads, -1, *lhs.shape[2:]]), rhs)
+    result = ops.bmmt_bcast_rhs(
+        lhs.reshape([lhs.shape[0], num_key_value_heads, -1, *lhs.shape[2:]]), rhs
+    )
     torch.testing.assert_close(result, ref)
     print("SUCCESS")
     print(asm)
 
+
 if __name__ == "__main__":
     main()
-
