@@ -4,8 +4,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from iree import runtime as ireert
 import torch
 import time
-from turbine_models.custom_models.llm_optimizations.streaming_llm.modify_llama import (
-    enable_llama_pos_shift_attention,
+from turbine_models.custom_models.llm.layers.attention import (
+    enable_custom_attention,
 )
 
 parser = argparse.ArgumentParser()
@@ -222,7 +222,7 @@ def run_torch_llm(
             token=hf_auth_token,
         )
     if streaming_llm is True:
-        enable_llama_pos_shift_attention(model)
+        enable_custom_attention(model, "streaming_llm")
 
     def get_token_from_logits(logits):
         return torch.argmax(logits[:, -1, :], dim=1)

@@ -8,7 +8,7 @@ import torch
 
 from shark_turbine import aot
 from sharktank import ops
-from turbine_models.custom_models.llm_optimizations import ops
+from turbine_models.custom_models.llm import ops
 
 
 # attn_weight: torch.Size([1, 8, 16, 16, 16]) bcdmk

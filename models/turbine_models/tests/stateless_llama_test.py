@@ -78,7 +78,8 @@ class StatelessLlamaChecks(unittest.TestCase):
 
     # See: https://github.com/nod-ai/SHARK-Turbine/issues/601
     # Developed issues related to the pytorch 2.3 upgrade.
-    @unittest.expectedFailure
+    # Current solution is to use our custom efficient implementation
+    # of attention.
     def test_vmfb_comparison(self):
         """
         Test that the vmfb model produces the same output as the torch model
@@ -103,6 +104,7 @@ class StatelessLlamaChecks(unittest.TestCase):
             upload_ir=upload_ir_var == "upload",
             mod=self.mod,
             tokenizer=self.tokenizer,
+            use_shark_attention=True,
         )
 
         torch_str_cache_path = (

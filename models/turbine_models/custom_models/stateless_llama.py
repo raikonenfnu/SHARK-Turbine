@@ -10,8 +10,8 @@ import torch
 from torch.utils import _pytree as pytree
 from shark_turbine.aot import *
 from iree.compiler.ir import Context
-from turbine_models.custom_models.llm_optimizations.streaming_llm.modify_llama import (
-    enable_llama_pos_shift_attention,
+from turbine_models.custom_models.llm.layers.attention import (
+    enable_custom_attention,
 )
 
 from turbine_models.custom_models import remap_gguf
@@ -61,6 +61,11 @@ parser.add_argument(
     "--streaming_llm",
     action="store_true",
     help="Compile LLM with StreamingLLM optimizations",
+)
+parser.add_argument(
+    "--use_custom_attention",
+    action="store_true",
+    help="Use SHARK custom attention implementation",
 )
 
 
@@ -123,6 +128,7 @@ def export_transformer_model(
     upload_ir=False,
     mod=None,
     tokenizer=None,
+    use_custom_attention=False,
 ):
     if tokenizer == None:
         tokenizer = AutoTokenizer.from_pretrained(
@@ -139,7 +145,9 @@ def export_transformer_model(
     schema_json = generate_schema(mod.config.num_hidden_layers)
     state_schema = pytree.treespec_loads(schema_json)
     if streaming_llm:
-        enable_llama_pos_shift_attention(mod)
+        enable_custom_attention(mod, "streaming_llm")
+    elif use_custom_attention:
+        enable_custom_attention(mod)
     dtype = torch.float32
     if precision == "f16":
         mod = mod.half()
@@ -498,6 +506,7 @@ if __name__ == "__main__":
         args.vulkan_max_allocation,
         args.streaming_llm,
         args.vmfb_path,
+        args.use_custom_attention,
     )
     safe_name = args.hf_model_name.split("/")[-1].strip()
     safe_name = re.sub("-", "_", safe_name)
